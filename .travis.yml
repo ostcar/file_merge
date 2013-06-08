@@ -1,0 +1,9 @@
+language: python
+python:
+  - "3.2"
+  - "3.3"
+install: "pip install -r requirements.txt --use-mirrors"
+script:
+  - coverage run ./test.py && coverage report -m
+  - pep8 --max-line-length=150 --statistics file_merge
+  - pep8 --max-line-length=150 --statistics test.py

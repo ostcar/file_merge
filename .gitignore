@@ -1,0 +1,18 @@
+# General
+*.pyc
+*.swp
+*~
+
+# Virtual Environment
+.venv/*
+
+# Package building
+docs/_build/*
+*.egg-info
+build/*
+dist/*
+.DS_Store
+
+# Unit test and coverage reports
+.coverage
+htmlcov
