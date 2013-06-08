@@ -1,5 +1,6 @@
 import os
 import hashlib
+import stat
 
 from .utils import SortableDict, verbose, INFO, DEVEL, WARNING, ERROR
 
@@ -62,7 +63,7 @@ class INodeFile(object):
             return False
         if self.md5sum != other.md5sum:
             return False
-        if self.sha1sum != self.sha1sum:
+        if self.sha1sum != other.sha1sum:
             return False
         # They propably are the same
         return True
@@ -100,16 +101,14 @@ class INodeFile(object):
 
         Returns True if the inode matches, else False.
         """
+
         if type(path) == INodeFile:
             if self == path:
                 self.files.update(path.files)
                 return True
             return False
 
-        try:
-            stat = os.lstat(path)
-        except IOError:
-            return False
+        stat = os.lstat(path)
         if stat.st_ino == self.inode:
             try:
                 path.encode('utf-8')
@@ -185,9 +184,9 @@ class INodeFile(object):
         # mv other to backup
         # create new hardlink to other
         # rm the backup
-        if type(other) == INodeFile:
+        if type(other) is INodeFile:
             for path in other.files:
-                backup = path + '.fsk-bu'
+                backup = path + '.file_merge-bu'
                 try:
                     os.rename(path, backup)
                     os.link(self.file, path)
@@ -198,8 +197,8 @@ class INodeFile(object):
                     self.addfile(path)
             other.merged_into = self
 
-        elif type(other) == INodeFileList:
-            for item in INodeFileList:
+        elif type(other) is INodeFileList:
+            for item in other:
                 self.merge(item)
 
     def dump(self):
@@ -241,25 +240,29 @@ class INodeFileList(object):
         """
         Retuns an INodeFile object.
 
-        item has to be an inode.
+        item has to be an inode, a path to a file or an INodeFile object
         """
-        if type(item) == int:
+        if type(item) is int:
             return self.storage[item]
         item = self.inode_file(item)
         return self.storage[item.inode]
 
-    def __delitem__(self, key):
+    def __delitem__(self, item):
         """
-        Removes one object from the object.
+        Removes a INodeFile from the object.
         """
-        if type(key) == INodeFile:
-            del self.storage[key.inode]
-        elif type(key) == INodeFileList:
-            for item in key:
-                del self[item]
+        if type(item) is int:
+            item = self.storage[item]
+        elif type(item) is INodeFileList:
+            for inode_file in item:
+                del self[inode_file]
+            return
+        item = self.inode_file(item)
+        if type(item) == INodeFile:
+            del self.storage[item.inode]
         else:
-            raise AttributeError('key has to be an INodeFile or an INodeFileList'
-                                 ', not %s' % type(key))
+            raise AttributeError('key has to be an INodeFile or an '
+                                 'INodeFileList, not %s' % type(key))
 
     def __reversed__(self):
         """
@@ -306,8 +309,7 @@ class INodeFileList(object):
         def yield_condition(iter_list):
             if len(iter_list) <= 1:
                 return False
-            if (sort_attribute == 'size' and
-                    iter_list.value_for_index(0).size <= size_limit):
+            if (iter_list.value_for_index(0).size <= size_limit):
                 return False
             return True
 
@@ -333,12 +335,7 @@ class INodeFileList(object):
         add a INodeFile to the object.
         """
         if type(item) == str:
-            try:
-                mode = os.lstat(item).st_mode
-            except OSError:
-                # TODO: Find a way not to inspect symlinks
-                # verbose('Can not find %s' % item)
-                return
+            mode = os.lstat(item).st_mode
             if stat.S_ISDIR(mode):
                 # TODO: Check relativ path
                 root_len = len(item.split('/'))
@@ -383,7 +380,7 @@ class INodeFileList(object):
         elif type(item) == INodeFile:
             return item
         else:
-            raise AttributeError('item has to be a path or HardFile not %s' %
+            raise AttributeError('item has to be a path or INodeFile not %s' %
                                  type(item))
 
     def merge(self, demo=False):
@@ -425,8 +422,9 @@ class INodeFileList(object):
         Loads the object from a file.
         """
         with open(path) as f:
-            for item in f.readlines():
-                self.add(INodeFile(item.strip()))
+            for line in f.readlines():
+                item = INodeFile(line.strip())
+                self.storage[item.inode] = item
 
     def size(self, meter='b'):
         # TODO: interpretate meter. Maby there is a lib?
