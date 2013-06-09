@@ -4,6 +4,11 @@ import stat
 
 from .utils import SortableDict, verbose, INFO, DEBUG, WARNING, ERROR
 
+# For Python < 3.3 support
+import sys
+if sys.version_info[1] < 3:
+    FileNotFoundError = OSError
+
 
 class INodeFile(object):
     """
