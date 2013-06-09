@@ -2,6 +2,9 @@ import unittest
 import fake_filesystem
 import file_merge.inode
 
+# Do not print anything.
+file_merge.utils.VERBOSE_LEVEL = 0
+
 # Create a fake file system and some fake objects
 filesystem = fake_filesystem.FakeFilesystem()
 
@@ -309,7 +312,6 @@ class TestINodeFileList(TestCase):
         self.assertEqual(item, INodeFile('/path1'))
         self.assertNotIn(item, self.ilist)
         self.assertEqual(len(self.ilist), 3)
-
 
 
 if __name__ == '__main__':

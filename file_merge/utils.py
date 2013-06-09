@@ -2,10 +2,11 @@
 Utils for the file_merge module
 """
 
+NONE = 0
 ERROR = 1
 WARNING = 2
 INFO = 3
-DEVEL = 5
+DEBUG = 5
 VERBOSE_LEVEL = INFO
 
 
@@ -116,5 +117,5 @@ class SortableDict(dict):
 
 
 def verbose(text, level=INFO):
-    if level >= VERBOSE_LEVEL:
+    if level <= VERBOSE_LEVEL:
         print(text)

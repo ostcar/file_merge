@@ -2,7 +2,7 @@ import os
 import hashlib
 import stat
 
-from .utils import SortableDict, verbose, INFO, DEVEL, WARNING, ERROR
+from .utils import SortableDict, verbose, INFO, DEBUG, WARNING, ERROR
 
 
 class INodeFile(object):
