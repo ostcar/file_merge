@@ -19,28 +19,20 @@ class SortableDict(dict):
     """
 
     def __init__(self, data=None):
-        if data is None:
-            data = {}
-        elif isinstance(data, GeneratorType):
-            # Unfortunately we need to be able to read a generator twice.  Once
-            # to get the data into self with our super().__init__ call and a
-            # second time to setup key_sort_order correctly
-            data = list(data)
-
-        super(SortableDict, self).__init__(data)
-        if isinstance(data, dict):
-            self.key_sort_order = list(data.keys())
+        if data is None or isinstance(data, dict):
+            data = data or []
+            super(SortableDict, self).__init__(data)
+            self.key_sort_order = list(data) if data else []
         else:
+            super(SortableDict, self).__init__()
+            super_set = super(SortableDict, self).__setitem__
             self.key_sort_order = []
-            seen = set()
             for key, value in data:
-                if key not in seen:
+                # Take the ordering from first key
+                if key not in self:
                     self.key_sort_order.append(key)
-                    seen.add(key)
-
-    def __deepcopy__(self, memo):
-        return self.__class__([(key, copy.deepcopy(value, memo))
-                               for key, value in self.iteritems()])
+                # But override with last value in data (dict() does this)
+                super_set(key, value)
 
     def __setitem__(self, key, value):
         if key not in self:
@@ -54,9 +46,6 @@ class SortableDict(dict):
     def __iter__(self):
         return iter(self.key_sort_order)
 
-    def __reversed__(self):
-        reversed(self.key_sort_order)
-
     def pop(self, k, *args):
         """
         Removes and returns a value.
@@ -69,12 +58,12 @@ class SortableDict(dict):
             pass
         return result
 
-    def popitem(self):
+    def popitem(self, *args):
         """
-        Removes and returns the first item.
+        Removes and returns an item at a specific index (default last).
         """
         try:
-            key = self.key_sort_order.pop()
+            key = self.key_sort_order.pop(*args)
             value = super(SortableDict, self).pop(key)
         except IndexError:
             return super(SortableDict, self).popitem()
@@ -82,28 +71,20 @@ class SortableDict(dict):
             return (key, value)
 
     def items(self):
-        return zip(self.key_sort_order, self.values())
-
-    def iteritems(self):
         for key in self.key_sort_order:
             yield key, self[key]
 
     def keys(self):
-        return self.key_sort_order[:]
-
-    def iterkeys(self):
-        return iter(self.key_sort_order)
+        for key in self.key_sort_order:
+            yield key
 
     def values(self):
-        return map(self.__getitem__, self.key_sort_order)
-
-    def itervalues(self):
         for key in self.key_sort_order:
             yield self[key]
 
     def update(self, dict_):
-        for k, v in dict_.iteritems():
-            self[k] = v
+        for key, value in dict_.items():
+            self[key] = value
 
     def setdefault(self, key, default):
         if key not in self:
@@ -111,27 +92,10 @@ class SortableDict(dict):
         return super(SortableDict, self).setdefault(key, default)
 
     def value_for_index(self, index):
-        """Returns the value of the item at the given zero-based index."""
+        """
+        Returns the value of the item at the given zero-based index.
+        """
         return self[self.key_sort_order[index]]
-
-    def insert(self, index, key, value):
-        """Inserts the key, value pair before the item with the given index."""
-        if key in self.key_sort_order:
-            n = self.key_sort_order.index(key)
-            del self.key_sort_order[n]
-            if n < index:
-                index -= 1
-        self.key_sort_order.insert(index, key)
-        super(SortableDict, self).__setitem__(key, value)
-
-    def copy(self):
-        """
-        Returns a copy of this object.
-        """
-        # This way of initializing the copy means it works for subclasses, too.
-        obj = self.__class__(self)
-        obj.key_sort_order = self.key_sort_order[:]
-        return obj
 
     def __repr__(self):
         """
@@ -146,7 +110,7 @@ class SortableDict(dict):
 
     def sort(self, *args, **kwargs):
         """
-        Sorts the dictonary
+        Sorts the dictonary.
         """
         self.key_sort_order.sort(*args, **kwargs)
 

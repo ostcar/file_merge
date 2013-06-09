@@ -68,12 +68,6 @@ class INodeFile(object):
         # They propably are the same
         return True
 
-    ## def __lt__(self, other):
-        ## """
-        ## Compares the size of a INodeFile object.
-        ## """
-        ## return self.size < other.size
-
     def __len__(self):
         """
         Returns the number of paths from this INodeFile object.
@@ -101,8 +95,7 @@ class INodeFile(object):
 
         Returns True if the inode matches, else False.
         """
-
-        if type(path) == INodeFile:
+        if type(path) is INodeFile:
             if self == path:
                 self.files.update(path.files)
                 return True
@@ -180,26 +173,23 @@ class INodeFile(object):
     def merge(self, other):
         """
         Merge other into self.
+
+        'other' has to be an INodeFile.
         """
         # mv other to backup
         # create new hardlink to other
         # rm the backup
-        if type(other) is INodeFile:
-            for path in other.files:
-                backup = path + '.file_merge-bu'
-                try:
-                    os.rename(path, backup)
-                    os.link(self.file, path)
-                    os.remove(backup)
-                except OSError:
-                    verbose('No rights for %s' % path, WARNING)
-                else:
-                    self.addfile(path)
-            other.merged_into = self
-
-        elif type(other) is INodeFileList:
-            for item in other:
-                self.merge(item)
+        for path in other.files:
+            backup = path + '.file_merge-bu'
+            try:
+                os.rename(path, backup)
+                os.link(self.file, path)
+                os.remove(backup)
+            except OSError:
+                verbose('No rights for %s' % path, WARNING)
+            else:
+                self.addfile(path)
+        other.merged_into = self
 
     def dump(self):
         """
@@ -225,10 +215,11 @@ class INodeFileList(object):
         ---------
         Either the argument directory or the argument load has to be set.
 
-        directory has to be a path to a directory. Each file in this directory
-        will be loaded
+        'directory' has to be a path to a directory. Each file in this directory
+        will be loaded.
 
-        load has to be a path to a dumped INodeFileList-file. It will be loaded.
+        'load' has to be a path to a dumped INodeFileList-file. It will be
+        loaded.
         """
         self.storage = SortableDict()
         if load is not None:
@@ -240,12 +231,15 @@ class INodeFileList(object):
         """
         Retuns an INodeFile object.
 
-        item has to be an inode, a path to a file or an INodeFile object
+        'item' has to be an inode or an INodeFile object.
         """
         if type(item) is int:
             return self.storage[item]
-        item = self.inode_file(item)
-        return self.storage[item.inode]
+        elif type(item) is INodeFile:
+            return self.storage[item.inode]
+        else:
+            raise AttributeError('item has to be intor INodeFile not %s'
+                                 % type(item))
 
     def __delitem__(self, item):
         """
@@ -257,25 +251,18 @@ class INodeFileList(object):
             for inode_file in item:
                 del self[inode_file]
             return
-        item = self.inode_file(item)
-        if type(item) == INodeFile:
+
+        if type(item) is INodeFile:
             del self.storage[item.inode]
         else:
-            raise AttributeError('key has to be an INodeFile or an '
+            raise AttributeError('key has to be int, INodeFile or '
                                  'INodeFileList, not %s' % type(key))
 
-    def __reversed__(self):
-        """
-        Revese the order of the INodeFiles.
-        """
-        reversed(self.storage)
-
     def __contains__(self, item):
-        item = self.inode_file(item)
         return item.inode in self.storage
 
     def __iter__(self):
-        return self.storage.itervalues()
+        return self.storage.values()
 
     def __len__(self):
         """
@@ -288,7 +275,9 @@ class INodeFileList(object):
 
     def sort_by_attribute(self, sort_attribute):
         """
-        Reorder the INodeFiles by the attribute
+        Reorder the INodeFiles by the attribute.
+
+        'sort_attribute' has to be the name of an attribute as string.
         """
         reverse = sort_attribute == 'size'
         self.storage.sort(
@@ -301,15 +290,18 @@ class INodeFileList(object):
         object, where by any File in the new INodeFileLists, one attribute
         is the same.
 
-        sort_attribute decide which attribute it is.
+        'sort_attribute' decide which attribute is used.
         """
         iter_list = INodeFileList()
         self.sort_by_attribute(sort_attribute)
 
         def yield_condition(iter_list):
-            if len(iter_list) <= 1:
-                return False
-            if (iter_list.value_for_index(0).size <= size_limit):
+            """
+            Returns True if the list would has more then one item and the size
+            of the items is larger then 'size_limit'.
+            """
+            if (len(iter_list) <= 1 or
+                    iter_list.value_for_index(0).size <= size_limit):
                 return False
             return True
 
@@ -328,32 +320,38 @@ class INodeFileList(object):
             yield iter_list
 
     def value_for_index(self, index):
+        """
+        Returns one INodeFile from the list.
+
+        'index' has to be an integer.
+        """
         return self.storage.value_for_index(index)
 
     def add(self, item):
         """
-        add a INodeFile to the object.
+        Add a INodeFile to the object.
         """
-        if type(item) == str:
-            mode = os.lstat(item).st_mode
+        if type(item) is str:
+            try:
+                mode = os.lstat(item).st_mode
+            except FileNotFoundError:
+                verbose("File not found: %s" % item, DEBUG)
+                return
             if stat.S_ISDIR(mode):
                 # TODO: Check relativ path
                 root_len = len(item.split('/'))
                 for root, dirs, files in os.walk(item):
                     for file in files:
-                        self.add(os.path.join(root, file))
+                        self.add(INodeFile(os.path.join(root, file)))
             elif stat.S_ISREG(mode):
-                item = self.inode_file(item)
-                if item in self:
-                    self[item].addfile(item)
-                else:
-                    self.storage[item.inode] = item
+                self.add(INodeFile(item))
             else:
+                verbose("Non regular file not supported: %s" % item, DEBUG)
                 return
         elif type(item) == INodeFile:
-            if item in self:
+            try:
                 self.storage[item.inode].addfile(item)
-            else:
+            except KeyError:
                 self.storage[item.inode] = item
         elif type(item) == INodeFileList:
             # It is not save to use self.update(item) because there could be
@@ -361,27 +359,13 @@ class INodeFileList(object):
             for item_value in item:
                 self.add(item_value)
         else:
-            raise ValueError("%s is not supported yet" % type(item))
+            raise TypeError("%s is not supported." % type(item))
 
-    def popitem(self):
+    def popitem(self, *args):
         """
-        Removes and returns the first INodeFile.
+        Removes and returns an INodeFile at a specific index (default last).
         """
-        return self.storage.popitem()[1]
-
-    def inode_file(self, item):
-        """
-        Returns a INodeFile object.
-
-        item can be a path to a file or an INodeFile object.
-        """
-        if type(item) == str:
-            return INodeFile(item)
-        elif type(item) == INodeFile:
-            return item
-        else:
-            raise AttributeError('item has to be a path or INodeFile not %s' %
-                                 type(item))
+        return self.storage.popitem(*args)[1]
 
     def merge(self, demo=False):
         """
@@ -401,7 +385,8 @@ class INodeFileList(object):
                     for sha1sum_list in md5sum_list.iter_list('sha1sum'):
                         # Any element in sha1sum_list should be identical.
                         base_item = sha1sum_list.popitem()
-                        base_item.merge(sha1sum_list)
+                        for item in sha1sum_list:
+                            base_item.merge(item)
                         merged_items.add(sha1sum_list)
         del self[merged_items]
         return merged_items
@@ -412,10 +397,7 @@ class INodeFileList(object):
         """
         with open(path, 'w') as save_file:
             for item in self:
-                try:
-                    save_file.write('%s\n' % item.dump())
-                except:
-                    verbose(item.inode, WARNING)
+                save_file.write('%s\n' % item.dump())
 
     def load(self, path):
         """

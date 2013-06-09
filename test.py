@@ -201,33 +201,28 @@ class TestINodeFileList(TestCase):
         self.add_file('/path2', 'content2')
         self.add_file('/path/to/file', 'other content')
         self.add_file('/path/to/file2', 'other content2')
+        self.path1 = INodeFile('/path1')
         self.ilist = INodeFileList('/')
 
     def test_init(self):
-
         self.assertEqual(len(self.ilist), 4)
 
     def test_getitem(self):
         self.assertEqual(self.ilist[1], INodeFile('/path1'))
         self.assertEqual(self.ilist[INodeFile('/path1')], INodeFile('/path1'))
-        self.assertEqual(self.ilist['/path1'], INodeFile('/path1'))
 
     def test_delitem_by_inode(self):
-        del self.ilist[1]
-        self.assertNotIn('/path1', self.ilist)
-
-    def test_delitem_by_path(self):
-        del self.ilist['/path1']
-        self.assertNotIn('/path1', self.ilist)
+        del self.ilist[self.path1.inode]
+        self.assertNotIn(self.path1, self.ilist)
 
     def test_delitem_by_inode_file(self):
-        del self.ilist[INodeFile('/path1')]
-        self.assertNotIn('/path1', self.ilist)
+        del self.ilist[self.path1]
+        self.assertNotIn(self.path1, self.ilist)
 
     def test_delitem_by_inode_file_list(self):
         inode_file_list = INodeFileList('/path/to')
         del self.ilist[inode_file_list]
-        self.assertNotIn('/path/to/file', self.ilist)
+        self.assertNotIn(INodeFile('/path/to/file'), self.ilist)
 
     def test_repr(self):
         self.assertEqual(repr(self.ilist), '4 INodeFiles')
@@ -265,11 +260,56 @@ class TestINodeFileList(TestCase):
     def test_size(self):
         self.assertEqual(self.ilist.size(), 42)
 
-    def test_dump_load(self):
+    def test_dump_and_load(self):
         self.add_file('/dumpfile', '')  # create dumpfile so it will be removed on teadDown
         self.ilist.dump('/dumpfile')
         ilist = INodeFileList(load='/dumpfile')
         self.assertEqual(ilist.storage, self.ilist.storage)
+
+    def test_add_inode_file(self):
+        self.add_file('/new_file', 'foobar', 500)
+        self.add_file('/new_file2', 'foobar', 500)
+        new_inode_file = INodeFile('/new_file')
+        new_inode_file2 = INodeFile('/new_file2')
+        self.assertEqual(len(self.ilist), 4)
+
+        self.ilist.add(new_inode_file)
+        self.assertEqual(len(self.ilist), 5)
+
+        self.ilist.add(new_inode_file)
+        self.assertEqual(len(self.ilist), 5)
+
+    def test_add_inode_file_list(self):
+        self.add_file('/path/new_file', 'foobar')
+        self.add_file('/path/new_file2', 'foobar')
+        new_inode_file_list = INodeFileList('/path')
+
+        self.ilist.add(new_inode_file_list)
+        self.assertEqual(len(self.ilist), 6)
+
+    def test_add_path(self):
+        self.add_file('/some/file', 'with content')
+        self.ilist.add('/some/file')
+
+        self.assertEqual(len(self.ilist), 5)
+        self.assertIn(INodeFile('/some/file'), self.ilist)
+
+    def test_add_unknown_file(self):
+        self.ilist.add('/some/file')
+        self.assertEqual(len(self.ilist), 4)
+
+    def test_add_unknown_type(self):
+        self.assertRaises(TypeError, self.ilist.add, 5)
+
+    def test_popitem(self):
+        # make sure, there is olways the same order
+        self.ilist.sort_by_attribute('size')
+
+        item = self.ilist.popitem()
+        self.assertEqual(item, INodeFile('/path1'))
+        self.assertNotIn(item, self.ilist)
+        self.assertEqual(len(self.ilist), 3)
+
 
 
 if __name__ == '__main__':
